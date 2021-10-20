@@ -592,10 +592,13 @@ static void
 ssl_send_certfp(conn_t *conn)
 {
 	uint8_t buf[13 + RB_SSL_CERTFP_LEN];
+	char *err;
 
-	int len = rb_get_ssl_certfp(conn->mod_fd, &buf[13], certfp_method);
-	if (!len)
+	int len = rb_get_ssl_certfp(conn->mod_fd, &buf[13], certfp_method, &err);
+	if (!len) {
+		ssl_send_error_client(conn, false, err);
 		return;
+	}
 
 	lrb_assert(len <= RB_SSL_CERTFP_LEN);
 	buf[0] = 'F';
