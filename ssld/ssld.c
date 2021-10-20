@@ -45,6 +45,21 @@ uint32_to_buf(uint8_t *buf, uint32_t x)
 	return;
 }
 
+static inline uint8_t
+buf_to_uint8(uint8_t *buf)
+{
+	uint8_t x;
+	memcpy(&x, buf, sizeof(x));
+	return x;
+}
+
+static inline void
+uint8_to_buf(uint8_t *buf, uint8_t x)
+{
+	memcpy(buf, &x, sizeof(x));
+	return;
+}
+
 typedef struct _mod_ctl_buf
 {
 	rb_dlink_node node;
@@ -527,6 +542,26 @@ maxconn(void)
 	}
 #endif /* RLIMIT_FD_MAX */
 	return MAXCONNECTIONS;
+}
+
+static void
+ssl_send_error_client(conn_t * conn, uint8_t fatal, const char *fmt, ...)
+{
+	va_list ap;
+	char reason[128];
+	uint8_t buf[256];	// 0: 'E', 1-5: connid, 6: fatal?, 7+ reason
+	int len;
+
+	va_start(ap, fmt);
+	vsnprintf(reason, sizeof(reason), fmt, ap);
+	va_end(ap);
+
+	buf[0] = 'E';
+	uint32_to_buf(&buf[1], conn->id);
+	uint8_to_buf(&buf[5], fatal);
+	rb_strlcpy((char *) &buf[6], reason, sizeof(buf) - 6);
+	len = (strlen(reason) + 1) + 6;
+	mod_cmd_write_queue(conn->ctl, buf, len);
 }
 
 static void

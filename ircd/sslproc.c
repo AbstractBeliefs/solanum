@@ -89,6 +89,21 @@ uint32_to_buf(char *buf, uint32_t x)
 	return;
 }
 
+static inline uint8_t
+buf_to_uint8(char *buf)
+{
+	uint8_t x;
+	memcpy(&x, buf, sizeof(x));
+	return x;
+}
+
+static inline void
+uint8_to_buf(char *buf, uint8_t x)
+{
+	memcpy(buf, &x, sizeof(x));
+	return;
+}
+
 static ssl_ctl_t *
 allocate_ssl_daemon(rb_fde_t * F, rb_fde_t * P, int pid)
 {
@@ -412,6 +427,28 @@ ssl_process_dead_fd(ssl_ctl_t * ctl, ssl_ctl_buf_t * ctl_buf)
 
 
 static void
+ssl_process_error_client(ssl_ctl_t *ctl, ssl_ctl_buf_t *ctl_buf)
+{
+	struct Client *client_p;
+	const char *errmsg;
+	uint32_t fd;
+	uint8_t fatal;
+
+	fd = buf_to_uint32(&ctl_buf->buf[1]);
+	fatal = buf_to_uint8(&ctl_buf->buf[5]);
+	errmsg = (const char *)&ctl_buf->buf[6];
+
+	client_p = find_cli_connid_hash(fd);
+	// Check that client_p is valid
+
+	if (fatal) {
+		exit_client(client_p, client_p, &me, errmsg);
+	} else {
+		sendto_one_notice(client_p, ":*** %s", errmsg);
+	}
+}
+
+static void
 ssl_process_cipher_string(ssl_ctl_t *ctl, ssl_ctl_buf_t *ctl_buf)
 {
 	struct Client *client_p;
@@ -514,6 +551,9 @@ ssl_process_cmd_recv(ssl_ctl_t * ctl)
 			break;
 		case 'D':
 			ssl_process_dead_fd(ctl, ctl_buf);
+			break;
+		case 'E':
+			ssl_process_error_client(ctl, ctl_buf);
 			break;
 		case 'C':
 			ssl_process_cipher_string(ctl, ctl_buf);
