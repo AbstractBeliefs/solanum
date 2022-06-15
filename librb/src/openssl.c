@@ -546,7 +546,7 @@ rb_get_ssl_strerror(rb_fde_t *const F)
 }
 
 int
-rb_get_ssl_certfp(rb_fde_t *const F, uint8_t certfp[const RB_SSL_CERTFP_LEN], const int method)
+rb_get_ssl_certfp(rb_fde_t *const F, uint8_t certfp[const RB_SSL_CERTFP_LEN], const int method, char **err)
 {
 	if(F == NULL || F->ssl == NULL)
 		return 0;
@@ -556,8 +556,9 @@ rb_get_ssl_certfp(rb_fde_t *const F, uint8_t certfp[const RB_SSL_CERTFP_LEN], co
 		return 0;
 
 	int len = 0;
+	long result = SSL_get_verify_result(SSL_P(F));
 
-	switch(SSL_get_verify_result(SSL_P(F)))
+	switch(result)
 	{
 	case X509_V_OK:
 	case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
@@ -566,11 +567,16 @@ rb_get_ssl_certfp(rb_fde_t *const F, uint8_t certfp[const RB_SSL_CERTFP_LEN], co
 	case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
 	case X509_V_ERR_CERT_UNTRUSTED:
 		len = make_certfp(peer_cert, certfp, method);
-		// fallthrough
+		break;
+	case X509_V_ERR_CERT_HAS_EXPIRED:
+		*err = "Your client certificate has expired";
+		break;
 	default:
-		X509_free(peer_cert);
-		return len;
+		*err = "Couldn't generate CertFP";
+		break;
 	}
+	X509_free(peer_cert);
+	return len;
 }
 
 int
